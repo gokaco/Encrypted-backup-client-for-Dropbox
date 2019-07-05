@@ -295,7 +295,7 @@ final class Sha256 {
 		@Unsigned byte w= (byte)0x80;
 		padded[msg.length] = w;
 		for (int i = 0; i < 4; i++){
-			@SuppressWarnings("signedness")
+			@SuppressWarnings("signedness") // https://github.com/typetools/checker-framework/issues/2483
 			@Unsigned byte p= (byte)((msg.length * 8) >>> (i * 8));
 			padded[padded.length - 1 - i] = p;
 		}
