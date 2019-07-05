@@ -74,13 +74,12 @@ import java.util.HashMap;
 import java.util.Map;
 import io.nayuki.json.Json;
 
-import org.checkerframework.checker.signedness.qual.Unsigned;
 
 public final class DropboxBackupService {
 	
 	/*---- Main application ----*/
 	
-	private static @Unsigned byte[] cipherKey;
+	private static byte[] cipherKey;
 	
 	private static String accessToken;
 	
@@ -156,13 +155,9 @@ public final class DropboxBackupService {
 			// Read entire file and encrypt
 			if (len > 1000000000)
 				throw new IllegalArgumentException("File too large");
-			@Unsigned byte[] b = new byte[(int)len];
+			byte[] b = new byte[(int)len];
 			try (DataInputStream in = new DataInputStream(new FileInputStream(srcItem))) {
-				/* readFully(byte[]) cannot take parameter as unsigned.
-				   Needs annotation int the JDK */
-				@SuppressWarnings("signedness")
-				byte[] c = b;
-				in.readFully(c);
+				in.readFully(b);
 			}
 			b = encryptFileData(b);
 			knownFiles.put(srcItem, info);
@@ -175,7 +170,7 @@ public final class DropboxBackupService {
 	
 	
 	// Please ensure that the data array is already encrypted!
-	private static void uploadFile(@Unsigned byte[] data, String path) throws IOException {
+	private static void uploadFile(byte[] data, String path) throws IOException {
 		if (!path.startsWith("/"))
 			throw new IllegalArgumentException("Path must start with slash");
 		if (path.contains("&") || path.contains("?"))
@@ -204,10 +199,7 @@ public final class DropboxBackupService {
 	private static String encryptFileName(String s) {
 		if (s.contains("\0"))
 			throw new IllegalArgumentException("File name must not contain NUL character");
-		/* getBytes() return type should be unsigned.
-		   Needs annotation in the JDK */
-		@SuppressWarnings("signedness")
-		@Unsigned byte[] b = s.getBytes(StandardCharsets.UTF_8);
+		byte[] b = s.getBytes(StandardCharsets.UTF_8);
 		Aes ciph = new Aes(cipherKey);
 		if (b.length <= Aes.BLOCK_LENGTH) {  // Single block
 			// Pad with zeros, then encrypt in ECB mode
@@ -219,17 +211,13 @@ public final class DropboxBackupService {
 			encryptCbcCts3(b);
 		}
 		Base64.Encoder b64enc = Base64.getUrlEncoder().withoutPadding();
-		/*Base64.Encoder encodeToString(byte[]) cannot take unsigned array as parameter.
-		  Needs annotation in the JDK.*/
-		@SuppressWarnings("signedness")
-		byte[] q = b;
-		return b64enc.encodeToString(q);
+		return b64enc.encodeToString(b);
 	}
 	
 	
 	// Encrypts the given binary data using the CBC (ciphertext block chaining) mode
 	// with no IV (initialization vector) and using CTS (ciphertext stealing) type 3.
-	private static void encryptCbcCts3(@Unsigned byte[] b) {
+	private static void encryptCbcCts3(byte[] b) {
 		int blockLen = Aes.BLOCK_LENGTH;
 		if (b.length <= blockLen)
 			throw new IllegalArgumentException("Data must be longer than one block");
@@ -248,7 +236,7 @@ public final class DropboxBackupService {
 		
 		// CBC last block, swap prefixes of last two blocks, encrypt new second-last block
 		for (int j = i; j < b.length; j++) {
-			@Unsigned byte temp = b[j - blockLen];
+			byte temp = b[j - blockLen];
 			b[j - blockLen] ^= b[j];
 			b[j] = temp;
 		}
@@ -259,12 +247,12 @@ public final class DropboxBackupService {
 	// Encrypts the file data with randomization and authentication. The algorithm pads the data
 	// using PKCS #7 (RFC 5652), prepends a randomly generated initialization vector, encrypts the
 	// whole data using AES-256-CBC, and appends an HMAC-SHA-256 of the encrypted data.
-	private static @Unsigned byte[] encryptFileData(@Unsigned byte[] data) {
+	private static byte[] encryptFileData(byte[] data) {
 		// Calculate offsets/lengths and make final-sized array (with space for IV, message, padding, HMAC)
 		int blockLen = Aes.BLOCK_LENGTH;
 		int paddedLen = (data.length / blockLen + 1) * blockLen;  // Without IV
 		int hashOffset = paddedLen + blockLen;  // Where the MAC starts
-		@Unsigned byte[] result = new byte[hashOffset + Sha256.HASH_LENGTH];
+		byte[] result = new byte[hashOffset + Sha256.HASH_LENGTH];
 		System.arraycopy(data, 0, result, blockLen, data.length);
 		
 		// Apply padding for cipher
@@ -288,7 +276,7 @@ public final class DropboxBackupService {
 		}
 		
 		// Compute and append MAC
-		@Unsigned byte[] hash = Sha256.getHmac(cipherKey, Arrays.copyOf(result, hashOffset));
+		byte[] hash = Sha256.getHmac(cipherKey, Arrays.copyOf(result, hashOffset));
 		System.arraycopy(hash, 0, result, hashOffset, hash.length);
 		return result;
 	}

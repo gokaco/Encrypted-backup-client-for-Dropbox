@@ -40,13 +40,12 @@ import java.util.Arrays;
 import java.util.Base64;
 import io.nayuki.json.Json;
 
-import org.checkerframework.checker.signedness.qual.Unsigned;
 
 public final class DropboxBackupDecrypter {
 	
 	/*---- Main application ----*/
 	
-	private static @Unsigned byte[] cipherKey;
+	private static byte[] cipherKey;
 	private static boolean hasError;
 	
 	
@@ -128,13 +127,9 @@ public final class DropboxBackupDecrypter {
 				hasError = true;
 				return;
 			}
-			@Unsigned byte[] b = new byte[(int)len];
+			byte[] b = new byte[(int)len];
 			try (DataInputStream in = new DataInputStream(new FileInputStream(srcItem))) {
-				/* readFully(byte[]) cannot take formal parameter as unsigned.
-				   Needs annotation int the JDK */
-				@SuppressWarnings("signedness")
-				byte[] c = b;
-				in.readFully(c);
+				in.readFully(b);
 			} catch (IOException e) {
 				System.err.printf("I/O exception when reading file: %s%n", srcItem);
 				hasError = true;
@@ -169,10 +164,7 @@ public final class DropboxBackupDecrypter {
 	// Decrypts the given base64 string as a file name using the cipher key.
 	// Throws an IllegalArgumentException if decryption failed.
 	private static String decryptFileName(String s) {
-		/*Base64.Decoder decode(String) has return type as array which should be unsigned
-		  Needs annotation in the JDK.*/
-		@SuppressWarnings("signedness")
-		@Unsigned byte[] b = Base64.getUrlDecoder().decode(s);
+		byte[] b = Base64.getUrlDecoder().decode(s);
 		Aes ciph = new Aes(cipherKey);
 		if (b.length < Aes.BLOCK_LENGTH)
 			throw new IllegalArgumentException("Invalid encrypted data length");
@@ -190,17 +182,13 @@ public final class DropboxBackupDecrypter {
 		}
 		if (!Utils.isValidUtf8(b))
 			throw new IllegalArgumentException("Invalid decrypted data");
-		/*Cannot pass unsigned array as parameter in the String(byte[],Charset)
-		  Needs annotation in the JDK*/
-		@SuppressWarnings("signedness")
-		byte[] r = b;
-		return new String(r, StandardCharsets.UTF_8);
+		return new String(b, StandardCharsets.UTF_8);
 	}
 	
 	
 	// Decrypts the given binary data in place using AES-256-CBC with CTS mode 3.
 	// Requires the data to be strictly greater than 1 block long, and always succeeds.
-	private static void decryptCbcCts3(@Unsigned byte[] b) {
+	private static void decryptCbcCts3(byte[] b) {
 		final int blockLen = Aes.BLOCK_LENGTH;
 		if (b.length <= blockLen)
 			throw new IllegalArgumentException("Data must be longer than one block");
@@ -212,7 +200,7 @@ public final class DropboxBackupDecrypter {
 		
 		// Swap prefixes of last two ciphertext blocks, un-CBC last block
 		for (int j = i + blockLen; j < b.length; j++) {
-			@Unsigned byte temp = b[j];
+			byte temp = b[j];
 			b[j] ^= b[j - blockLen];
 			b[j - blockLen] = temp;
 		}
@@ -231,7 +219,7 @@ public final class DropboxBackupDecrypter {
 	// Tries to decrypt the file data in the given array, returning a new array with the bare data.
 	// This function throws an IllegalArgumentException if the MAC or padding is incorrect.
 	// Note that to save memory, the input array is clobbered by this function.
-	private static @Unsigned byte[] decryptFileData(@Unsigned byte[] data) {
+	private static byte[] decryptFileData(byte[] data) {
 		final int blockLen = Aes.BLOCK_LENGTH;
 		int hashOffset = data.length - Sha256.HASH_LENGTH;  // Where the MAC starts
 		int paddedLen = hashOffset - blockLen;  // Minus the IV
@@ -239,8 +227,8 @@ public final class DropboxBackupDecrypter {
 			throw new IllegalArgumentException("Invalid encrypted data length");
 		
 		// Check the message authentication code
-		@Unsigned byte[] hash = Sha256.getHmac(cipherKey, Arrays.copyOf(data, hashOffset));
-		@Unsigned int diff = 0;
+		byte[] hash = Sha256.getHmac(cipherKey, Arrays.copyOf(data, hashOffset));
+		int diff = 0;
 		for (int i = 0; i < hash.length; i++)
 			diff |= hash[i] ^ data[hashOffset + i];
 		if (diff != 0)
@@ -266,3 +254,4 @@ public final class DropboxBackupDecrypter {
 	}
 	
 }
+ 

@@ -13,7 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
-import org.checkerframework.checker.signedness.qual.Unsigned;
+
 /* 
  * Miscellaneous shared simple utility functions shared by both main programs.
  */
@@ -21,7 +21,7 @@ final class Utils {
 	
 	// Tests whether the given byte array represents a valid Unicode string encoded in UTF-8.
 	// This function correctly rejects overlong encodings and UTF-16 surrogate code points.
-	public static boolean isValidUtf8(@Unsigned byte[] b) {
+	public static boolean isValidUtf8(byte[] b) {
 		for (int i = 0; i < b.length; ) {
 			int c = b[i] & 0xFF;
 			i++;
@@ -50,8 +50,7 @@ final class Utils {
 			for (; rest > 0; rest--, i++) {
 				if (i >= b.length)
 					return false;
-				int p= b[i] & 0x3F;
-				accum = accum << 6 | p;
+				accum = accum << 6 | (b[i] & 0x3F);
 			}
 			if (accum < least || accum > 0x10FFFF || 0xD800 <= accum && accum <= 0xDFFF)
 				return false;
@@ -62,20 +61,20 @@ final class Utils {
 	
 	// Converts the given hexadecimal string to a new byte array. The string must have
 	// even length and only contain the characters 0 to 9, A to F (case-insensitive).
-	public static @Unsigned byte[] hexToBytes(String s) {
+	public static byte[] hexToBytes(String s) {
 		if (!s.matches("(?:[0-9A-Fa-f]{2})*"))
 			throw new IllegalArgumentException("Invalid hexadecimal string");
-		@Unsigned byte[] b = new byte[s.length() / 2];
+		byte[] b = new byte[s.length() / 2];
 		for (int i = 0; i < s.length(); i += 2)
-			b[i / 2] = (byte)Integer.parseUnsignedInt(s.substring(i, i + 2), 16);
+			b[i / 2] = (byte)Integer.parseInt(s.substring(i, i + 2), 16);
 		return b;
 	}
 	
 	
 	// Reverses all elements of the given array in place.
-	public static void reverseArray(@Unsigned byte[] b) {
+	public static void reverseArray(byte[] b) {
 		for (int i = 0, j = b.length - 1; i < j; i++, j--) {
-			@Unsigned byte temp = b[i];
+			byte temp = b[i];
 			b[i] = b[j];
 			b[j] = temp;
 		}
@@ -83,7 +82,7 @@ final class Utils {
 	
 	
 	// Packs the 4 bytes at the given offset into an int32 in big endian.
-	public static @Unsigned int toInt32(@Unsigned byte[] b, int off) {
+	public static int toInt32(byte[] b, int off) {
 		return (b[off + 0] & 0xFF) << 24
 		     | (b[off + 1] & 0xFF) << 16
 		     | (b[off + 2] & 0xFF) <<  8
@@ -106,22 +105,22 @@ final class Aes {
 	public static final int BLOCK_LENGTH = 16;  // In bytes
 	
 	
-	private @Unsigned byte[][] keySchedule;
+	private byte[][] keySchedule;
 	
 	
-	public Aes(@Unsigned byte[] key) {
+	public Aes(byte[] key) {
 		if (key.length != 16 && key.length != 24 && key.length != 32)
 			throw new IllegalArgumentException("Invalid key length");
 		
 		// Expand key into key schedule
 		int nk = key.length / 4;
 		int rounds = Math.max(nk, 4) + 6;
-		@Unsigned int[] w = new int[(rounds + 1) * 4];  // Key schedule
+		int[] w = new int[(rounds + 1) * 4];  // Key schedule
 		for (int i = 0; i < nk; i++)
 			w[i] = Utils.toInt32(key, i * 4);
-		@Unsigned byte rcon = 1;
+		byte rcon = 1;
 		for (int i = nk; i < w.length; i++) {  // rcon = 2^(i/nk) mod 0x11B
-			@Unsigned int tp = w[i - 1];
+			int tp = w[i - 1];
 			if (i % nk == 0) {
 				tp = subInt32Bytes(rotateRight(tp, 24)) ^ (rcon << 24);
 				rcon = multiply(rcon, (byte)0x02);
@@ -131,7 +130,7 @@ final class Aes {
 		}
 		
 		// Pack into one 16-byte array per round
-		keySchedule = new @Unsigned byte[w.length / 4][BLOCK_LENGTH];
+		keySchedule = new byte[w.length / 4][BLOCK_LENGTH];
 		for (int i = 0; i < keySchedule.length; i++) {
 			for (int j = 0; j < keySchedule[i].length; j++)
 				keySchedule[i][j] = (byte)(w[i * 4 + j / 4] >>> ((3 - j % 4) * 8));
@@ -140,11 +139,11 @@ final class Aes {
 	
 	
 	// Encrypts one message block in place at the given offset.
-	public void encryptBlock(@Unsigned byte[] msg, int off) {
+	public void encryptBlock(byte[] msg, int off) {
 		// Initial round
-		@Unsigned byte[] temp0 = Arrays.copyOfRange(msg, off, off + BLOCK_LENGTH);
+		byte[] temp0 = Arrays.copyOfRange(msg, off, off + BLOCK_LENGTH);
 		addRoundKey(temp0, keySchedule[0]);
-		@Unsigned byte[] temp1 = new byte[BLOCK_LENGTH];
+		byte[] temp1 = new byte[BLOCK_LENGTH];
 		
 		// Middle rounds
 		for (int k = 1; k < keySchedule.length - 1; k++) {
@@ -175,11 +174,11 @@ final class Aes {
 	
 	
 	// Decrypts one message block in place at the given offset.
-	public void decryptBlock(@Unsigned byte[] msg, int off) {
+	public void decryptBlock(byte[] msg, int off) {
 		// Initial round
-		@Unsigned byte[] temp0 = Arrays.copyOfRange(msg, off, off + BLOCK_LENGTH);
+		byte[] temp0 = Arrays.copyOfRange(msg, off, off + BLOCK_LENGTH);
 		addRoundKey(temp0, keySchedule[keySchedule.length - 1]);
-		@Unsigned byte[] temp1 = new byte[BLOCK_LENGTH];
+		byte[] temp1 = new byte[BLOCK_LENGTH];
 		for (int i = 0; i < 4; i++) {  // Shift rows inverse and sub bytes inverse
 			for (int j = 0; j < 4; j++)
 				temp1[i + j * 4] = SBOX_INVERSE[temp0[i + (j - i + 4) % 4 * 4] & 0xFF];
@@ -209,7 +208,7 @@ final class Aes {
 	}
 	
 	
-	private static void addRoundKey(@Unsigned byte[] block, @Unsigned byte[] key) {
+	private static void addRoundKey(byte[] block, byte[] key) {
 		for (int i = 0; i < BLOCK_LENGTH; i++)
 			block[i] ^= key[i];
 	}
@@ -217,15 +216,14 @@ final class Aes {
 	
 	/* Utilities */
 	
-	private static @Unsigned byte[] SBOX = new byte[256];
-	private static @Unsigned byte[] SBOX_INVERSE = new byte[256];
+	private static byte[] SBOX = new byte[256];
+	private static byte[] SBOX_INVERSE = new byte[256];
 	
 	// Initialize the S-box and inverse
 	static {
 		for (int i = 0; i < 256; i++) {
-			@Unsigned byte p=(byte)i;
-			@Unsigned byte tp = reciprocal(p);
-			@Unsigned byte s = (byte)(tp ^ rotateByteLeft(tp, 1) ^ rotateByteLeft(tp, 2)
+			byte tp = reciprocal((byte)i);
+			byte s = (byte)(tp ^ rotateByteLeft(tp, 1) ^ rotateByteLeft(tp, 2)
 				^ rotateByteLeft(tp, 3) ^ rotateByteLeft(tp, 4) ^ 0x63);
 			SBOX[i] = s;
 			SBOX_INVERSE[s & 0xFF] = (byte)i;
@@ -233,9 +231,9 @@ final class Aes {
 	}
 	
 	
-	private static @Unsigned byte multiply(@Unsigned byte x, @Unsigned byte y) {
+	private static byte multiply(byte x, byte y) {
 		// Russian peasant multiplication
-		@Unsigned byte z = 0;
+		byte z = 0;
 		for (int i = 0; i < 8; i++) {
 			z ^= x * ((y >>> i) & 1);
 			x = (byte)((x << 1) ^ (((x >>> 7) & 1) * 0x11B));
@@ -244,11 +242,11 @@ final class Aes {
 	}
 	
 	
-	private static @Unsigned byte reciprocal(@Unsigned byte x) {
+	private static byte reciprocal(byte x) {
 		if (x == 0)
 			return 0;
 		else {
-			for (@Unsigned byte y = 1; y != 0; y++) {
+			for (byte y = 1; y != 0; y++) {
 				if (multiply(x, y) == 1)
 					return y;
 			}
@@ -257,14 +255,14 @@ final class Aes {
 	}
 	
 	
-	private static @Unsigned byte rotateByteLeft(@Unsigned byte x, int y) {
+	private static byte rotateByteLeft(byte x, int y) {
 		if (y < 0 || y >= 8)
 			throw new IllegalArgumentException("Input out of range");
 		return (byte)((x << y) | ((x & 0xFF) >>> (8 - y)));
 	}
 	
 	
-	private static @Unsigned int subInt32Bytes(@Unsigned int x) {
+	private static int subInt32Bytes(int x) {
 		return (SBOX[x >>> 24 & 0xFF] & 0xFF) << 24
 		     | (SBOX[x >>> 16 & 0xFF] & 0xFF) << 16
 		     | (SBOX[x >>>  8 & 0xFF] & 0xFF) <<  8
@@ -285,40 +283,35 @@ final class Sha256 {
 	
 	
 	// Returns the SHA-256 hash of the given message array.
-	public static @Unsigned byte[] getHash(@Unsigned byte[] msg) {
+	public static byte[] getHash(byte[] msg) {
 		if (msg.length > Integer.MAX_VALUE / 8)
 			throw new IllegalArgumentException("Message too large for this implementation");
 		
 		// Add 1 byte for termination, 8 bytes for length, then round up to multiple of block size (64)
-		@Unsigned byte[] padded = Arrays.copyOf(msg, (msg.length + 1 + 8 + 63) / 64 * 64);
-		@SuppressWarnings("value") // https://github.com/typetools/checker-framework/issues/2367
-		@Unsigned byte w= (byte)0x80;
-		padded[msg.length] = w;
-		for (int i = 0; i < 4; i++){
-			@SuppressWarnings("signedness")
-			@Unsigned byte p= (byte)((msg.length * 8) >>> (i * 8));
-			padded[padded.length - 1 - i] = p;
-		}
+		byte[] padded = Arrays.copyOf(msg, (msg.length + 1 + 8 + 63) / 64 * 64);
+		padded[msg.length] = (byte)0x80;
+		for (int i = 0; i < 4; i++)
+			padded[padded.length - 1 - i] = (byte)((msg.length * 8) >>> (i * 8));
 		
 		// Compress each block
-		@Unsigned int[] state = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
+		int[] state = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
 		for (int off = 0; off < padded.length; off += 64) {
-			@Unsigned int[] schedule = new int[64];
+			int[] schedule = new int[64];
 			for (int i = 0; i < 16; i++)
 				schedule[i] = Utils.toInt32(padded, off + i * 4);
 			for (int i = 16; i < 64; i++) {
-				@Unsigned int x = schedule[i - 15];
-				@Unsigned int y = schedule[i -  2];
+				int x = schedule[i - 15];
+				int y = schedule[i -  2];
 				schedule[i] = schedule[i - 16] + schedule[i - 7] +
 				              (rotateRight(x,  7) ^ rotateRight(x, 18) ^ (x >>>  3)) +
 				              (rotateRight(y, 17) ^ rotateRight(y, 19) ^ (y >>> 10));
 			}
 			
-			@Unsigned int a = state[0], b = state[1], c = state[2], d = state[3];
-			@Unsigned int e = state[4], f = state[5], g = state[6], h = state[7];
+			int a = state[0], b = state[1], c = state[2], d = state[3];
+			int e = state[4], f = state[5], g = state[6], h = state[7];
 			for (int i = 0; i < 64; i++) {
-				@Unsigned int t1 = h + (rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)) + ((e & f) ^ (~e & g)) + ROUND_CONSTS[i] + schedule[i];
-				@Unsigned int t2 = (rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
+				int t1 = h + (rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)) + ((e & f) ^ (~e & g)) + ROUND_CONSTS[i] + schedule[i];
+				int t2 = (rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
 				h = g;
 				g = f;
 				f = e;
@@ -333,7 +326,7 @@ final class Sha256 {
 		}
 		
 		// Serialize state as result
-		@Unsigned byte[] hash = new byte[state.length * 4];
+		byte[] hash = new byte[state.length * 4];
 		for (int i = 0; i < hash.length; i++)
 			hash[i] = (byte)(state[i / 4] >>> ((3 - i % 4) * 8));
 		return hash;
@@ -341,7 +334,7 @@ final class Sha256 {
 	
 	
 	// Returns the HMAC-SHA-256 of the given message using the given key.
-	public static @Unsigned byte[] getHmac(@Unsigned byte[] key, @Unsigned byte[] msg) {
+	public static byte[] getHmac(byte[] key, byte[] msg) {
 		// Preprocess the key
 		if (key.length > BLOCK_LENGTH)
 			key = getHash(key);
@@ -354,10 +347,7 @@ final class Sha256 {
 			ByteArrayOutputStream bout = new ByteArrayOutputStream();
 			bout.write(key);
 			bout.write(msg);
-			/*bout.toByteArray() return type
-			  should be unsigned */
-			@SuppressWarnings("signedness")
-			@Unsigned byte[] innerHash = getHash(bout.toByteArray());
+			byte[] innerHash = getHash(bout.toByteArray());
 			
 			// Compute outer hash
 			for (int i = 0; i < key.length; i++)
@@ -365,11 +355,7 @@ final class Sha256 {
 			bout = new ByteArrayOutputStream();
 			bout.write(key);
 			bout.write(innerHash);
-			/*bout.toByteArray() return type
-			  should be unsigned */
-			@SuppressWarnings("signedness")
-			@Unsigned byte[] p=bout.toByteArray();
-			return getHash(p);
+			return getHash(bout.toByteArray());
 			
 		} catch (IOException e) {
 			throw new AssertionError(e);
@@ -377,7 +363,7 @@ final class Sha256 {
 	}
 	
 	
-	private static final @Unsigned int[] ROUND_CONSTS = {
+	private static final int[] ROUND_CONSTS = {
 		0x428A2F98, 0x71374491, 0xB5C0FBCF, 0xE9B5DBA5, 0x3956C25B, 0x59F111F1, 0x923F82A4, 0xAB1C5ED5,
 		0xD807AA98, 0x12835B01, 0x243185BE, 0x550C7DC3, 0x72BE5D74, 0x80DEB1FE, 0x9BDC06A7, 0xC19BF174,
 		0xE49B69C1, 0xEFBE4786, 0x0FC19DC6, 0x240CA1CC, 0x2DE92C6F, 0x4A7484AA, 0x5CB0A9DC, 0x76F988DA,
