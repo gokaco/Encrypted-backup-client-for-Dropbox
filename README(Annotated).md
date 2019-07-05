@@ -20,6 +20,4 @@ In this case study I learnt that signedness checker is weak in some classes and 
 
 4.)java.io.ByteArrayOutputStream
 
-Some issues occurred like Issue #2483, #2367.
-
-and I think many more in the future too.
+Some issues occurred again like Issue #2483, #2367.
